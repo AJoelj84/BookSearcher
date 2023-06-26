@@ -1,6 +1,7 @@
 const express = require('express');
 const { ApolloServer } = require('apollo-server-express');
 const path = require('path');
+require('dotenv').config();
 const db = require('./config/connection');
 const { typeDefs, resolvers } = require('./graphql');
 
@@ -25,3 +26,5 @@ server.applyMiddleware({ app });
 db.once('open', () => {
   app.listen(PORT, () => console.log(`🌍 Now listening on localhost:${PORT}`));
 });
+
+db.connect();
