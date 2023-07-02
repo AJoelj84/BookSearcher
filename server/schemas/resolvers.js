@@ -1,73 +1,58 @@
+const { AuthenticationError } = require('apollo-server-express');
 const { User } = require('../models');
 const { signToken } = require('../utils/auth');
 
 const resolvers = {
   Query: {
-    me: async (_, __, { user }) => {
-      if (!user) {
-        throw new Error('You must be logged in to view this information.');
+    me: async (parent, args, context) => {
+      if (context.user) {
+        return User.findOne({ _id: context.user._id });
       }
-
-      const foundUser = await User.findOne({ _id: user._id });
-      return foundUser;
+      throw new AuthenticationError('You need to be logged in!');
     },
   },
   Mutation: {
-    login: async (_, { email, password }) => {
+    addUser: async (parent, { username, email, password }) => {
+      const user = await User.create({ username, email, password });
+      const token = signToken(user);
+      return { token, user };
+    },
+    login: async (parent, { email, password }) => {
       const user = await User.findOne({ email });
 
       if (!user) {
-        throw new Error("Can't find this user");
+        throw new AuthenticationError('No user found with this email address');
       }
 
       const correctPw = await user.isCorrectPassword(password);
 
       if (!correctPw) {
-        throw new Error('Wrong password!');
+        throw new AuthenticationError('Incorrect credentials');
       }
 
       const token = signToken(user);
+
       return { token, user };
     },
-    createUser: async (_, { username, email, password }) => {
-      const user = await User.create({ username, email, password });
-
-      if (!user) {
-        throw new Error('Something went wrong during user creation.');
+    saveBook: async (parent, { input }, context) => {
+      if (context.user) {
+        return User.findOneAndUpdate(
+          { _id: context.user._id },
+          { $addToSet: { savedBooks: input } },
+          { new: true}
+        );
       }
-
-      const token = signToken(user);
-      return { token, user };
+      throw new AuthenticationError('You need to be logged in!');
     },
-    saveBook: async (_, { book }, { user }) => {
-      if (!user) {
-        throw new Error('You must be logged in to save a book.');
+    removeBook: async (parent, { bookId }, context) => {
+      if (context.user) {
+        return User.findOneAndUpdate(
+          { _id: context.user._id },
+          { $pull: { savedBooks: { bookId: bookId }} },
+          { new: true}
+        );
       }
-
-      const updatedUser = await User.findOneAndUpdate(
-        { _id: user._id },
-        { $addToSet: { savedBooks: book } },
-        { new: true, runValidators: true }
-      );
-
-      return updatedUser;
-    },
-    deleteBook: async (_, { bookId }, { user }) => {
-      if (!user) {
-        throw new Error('You must be logged in to delete a book.');
-      }
-
-      const updatedUser = await User.findOneAndUpdate(
-        { _id: user._id },
-        { $pull: { savedBooks: { bookId } } },
-        { new: true }
-      );
-
-      if (!updatedUser) {
-        throw new Error("Couldn't find user with this id!");
-      }
-
-      return updatedUser;
+      throw new AuthenticationError('You need to be logged in!');
     },
   },
 };
